@@ -25,9 +25,24 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             max-height: 200px;
             overflow-y: auto;
+            padding: 10px;
         }
         #songList.hidden {
             display: none;
+        }
+        #songList li {
+            padding: 12px;
+            margin: 5px 0;
+            background: #007BFF;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s;
+            text-align: center;
+            font-weight: bold;
+        }
+        #songList li:hover {
+            background: #0056b3;
         }
         #toggleSongList {
             display: none;
@@ -38,6 +53,7 @@
             color: white;
             border-radius: 5px;
             margin-bottom: 10px;
+            font-weight: bold;
         }
         #playerContainer {
             margin-top: 20px;
@@ -82,6 +98,7 @@
             border: none;
             border-radius: 5px;
             cursor: pointer;
+            font-weight: bold;
         }
     </style>
 </head>
