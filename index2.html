@@ -22,6 +22,7 @@
             background: white;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-top: 20px;
         }
         #songList li {
             cursor: pointer;
@@ -76,37 +77,60 @@
             border: 1px solid red;
             display: none;
         }
-        #songData {
+        #manualInput {
             width: 100%;
             height: 100px;
-            margin: 20px 0;
-            display: none;
+            margin: 10px 0;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: monospace;
         }
-        .controls {
-            margin: 20px 0;
-            text-align: center;
-        }
-        .controls button {
-            padding: 8px 16px;
-            margin: 0 5px;
+        #processButton {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
             cursor: pointer;
+            font-size: 16px;
+        }
+        #processButton:hover {
+            background-color: #45a049;
+        }
+        .input-section {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .lrc-input {
+            width: 100%;
+            height: 200px;
+            margin: 10px 0;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-family: monospace;
+            display: none;
         }
     </style>
 </head>
 <body>
     <h1>LRC & YouTube Player</h1>
     <div id="errorDisplay"></div>
-    <textarea id="songData" placeholder="Paste your song data here (format: filename|youtubeLink)"></textarea>
-    <div class="controls">
-        <button onclick="loadSongData()">Load Songs</button>
+
+    <div class="input-section">
+        <h3>Data Input (filename.lrc|youtubeURL format)</h3>
+        <textarea id="manualInput" placeholder="Enter data in format:&#10;filename1.lrc|https://youtube.com/watch?v=...&#10;filename2.lrc|https://youtube.com/watch?v=..."></textarea>
+        <button id="processButton">Process Input</button>
+        <textarea id="currentLrcInput" class="lrc-input" placeholder="Paste LRC file content here when prompted"></textarea>
     </div>
+
     <ul id="songList"></ul>
     <div id="playerContainer">
         <div id="youtubePlayer"></div>
-        <textarea id="lrcInput" style="width: 100%; height: 100px; margin: 20px 0; display: none;"></textarea>
-        <div class="controls">
-            <button onclick="updateLyrics()">Update Lyrics</button>
-        </div>
         <div id="lyricsDisplay"></div>
     </div>
 
@@ -115,6 +139,7 @@
         let currentLyrics = [];
         let currentLyricIndex = -1;
         let syncInterval;
+        let lrcContents = new Map(); // Store LRC contents
         
         function showError(message) {
             const errorDisplay = document.getElementById('errorDisplay');
@@ -123,30 +148,86 @@
             console.error(message);
         }
 
-        function loadSongData() {
-            const songDataText = document.getElementById('songData').value;
-            const songList = document.getElementById('songList');
-            songList.innerHTML = '';
+        // Try loading from file first
+        console.log('Starting to load data.txt...');
+        fetch('data.txt')
+            .then(response => {
+                if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                return response.text();
+            })
+            .then(data => {
+                document.getElementById('manualInput').value = data;
+                processInput(data);
+            })
+            .catch(error => {
+                console.log('Could not load data.txt, waiting for manual input');
+            });
 
-            if (!songDataText.trim()) {
-                showError('Please enter song data');
+        // Process button click handler
+        document.getElementById('processButton').onclick = () => {
+            const input = document.getElementById('manualInput').value;
+            processInput(input);
+        };
+
+        function processInput(data) {
+            console.log('Processing input data');
+            const songList = document.getElementById('songList');
+            songList.innerHTML = ''; // Clear existing list
+
+            if (!data.trim()) {
+                showError('No data provided');
                 return;
             }
 
-            songDataText.trim().split('\n').forEach((line, index) => {
+            data.trim().split('\n').forEach((line, index) => {
+                console.log(`Processing line ${index}:`, line);
                 const [filename, youtubeLink] = line.split('|');
                 if (!filename || !youtubeLink) {
                     showError(`Invalid line format: ${line}`);
                     return;
                 }
-                
+
                 const li = document.createElement('li');
                 li.textContent = filename.replace('.lrc', '');
                 li.dataset.filename = filename;
-                li.dataset.youtubeLink = youtubeLink;
-                li.onclick = () => loadSong(filename, youtubeLink);
+                li.dataset.youtubeLink = youtubeLink.trim();
+                li.onclick = () => promptForLyrics(filename, youtubeLink.trim());
                 songList.appendChild(li);
             });
+        }
+
+        function promptForLyrics(filename, youtubeLink) {
+            if (lrcContents.has(filename)) {
+                loadSong(filename, youtubeLink, lrcContents.get(filename));
+                return;
+            }
+
+            const lrcInput = document.getElementById('currentLrcInput');
+            lrcInput.style.display = 'block';
+            lrcInput.value = '';
+            lrcInput.placeholder = `Please paste the contents of ${filename} here...`;
+            
+            const oldButton = document.querySelector('.temp-button');
+            if (oldButton) oldButton.remove();
+
+            const loadButton = document.createElement('button');
+            loadButton.textContent = `Load ${filename}`;
+            loadButton.className = 'temp-button';
+            loadButton.style.cssText = 'margin: 10px 0; padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;';
+            
+            loadButton.onclick = () => {
+                const content = lrcInput.value;
+                if (content.trim()) {
+                    lrcContents.set(filename, content);
+                    lrcInput.style.display = 'none';
+                    loadButton.remove();
+                    loadSong(filename, youtubeLink, content);
+                } else {
+                    showError('Please paste the LRC file content');
+                }
+            };
+
+            lrcInput.parentNode.insertBefore(loadButton, lrcInput.nextSibling);
         }
 
         // Load the YouTube IFrame Player API
@@ -155,6 +236,7 @@
         document.head.appendChild(tag);
 
         window.onYouTubeIframeAPIReady = function() {
+            console.log('YouTube IFrame API Ready');
             player = new YT.Player('youtubePlayer', {
                 height: '360',
                 width: '640',
@@ -172,10 +254,13 @@
         }
 
         function onPlayerError(event) {
+            console.error('YouTube player error:', event.data);
             showError('Error loading YouTube video');
         }
 
-        function loadSong(filename, youtubeLink) {
+        function loadSong(filename, youtubeLink, lrcContent) {
+            console.log('Loading song:', filename, youtubeLink);
+            
             const videoId = youtubeLink.match(/[?&]v=([^&]+)/)?.[1] || 
                            youtubeLink.match(/youtu\.be\/([^?]+)/)?.[1];
             
@@ -184,28 +269,22 @@
                 return;
             }
 
-            // Show LRC input for manual entry
-            document.getElementById('lrcInput').style.display = 'block';
-            document.getElementById('playerContainer').style.display = 'block';
+            try {
+                currentLyrics = parseLRC(lrcContent);
+                console.log('Parsed lyrics:', currentLyrics);
+                displayLyrics();
+                currentLyricIndex = -1;
 
-            // Load video
-            if (player && player.loadVideoById) {
-                player.loadVideoById(videoId);
-            } else {
-                showError('YouTube player not ready');
+                if (player && player.loadVideoById) {
+                    console.log('Loading YouTube video:', videoId);
+                    player.loadVideoById(videoId);
+                    document.getElementById('playerContainer').style.display = 'block';
+                } else {
+                    showError('YouTube player not ready');
+                }
+            } catch (error) {
+                showError(`Error processing lyrics: ${error.message}`);
             }
-        }
-
-        function updateLyrics() {
-            const lrcText = document.getElementById('lrcInput').value;
-            if (!lrcText.trim()) {
-                showError('Please enter lyrics');
-                return;
-            }
-
-            currentLyrics = parseLRC(lrcText);
-            displayLyrics();
-            currentLyricIndex = -1;
         }
 
         function parseLRC(text) {
@@ -261,6 +340,7 @@
         }
 
         function onPlayerStateChange(event) {
+            console.log('Player state changed:', event.data);
             if (event.data === YT.PlayerState.PLAYING) {
                 if (syncInterval) clearInterval(syncInterval);
                 syncInterval = setInterval(syncLyrics, 100);
@@ -268,9 +348,6 @@
                 if (syncInterval) clearInterval(syncInterval);
             }
         }
-
-        // Show the song data textarea on page load
-        document.getElementById('songData').style.display = 'block';
     </script>
 </body>
 </html>
