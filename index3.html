@@ -17,59 +17,6 @@
             color: #333;
             text-align: center;
         }
-        #songList {
-            list-style: none;
-            padding: 0;
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            max-height: 200px;
-            overflow-y: auto;
-            padding: 10px;
-        }
-        #songList.hidden {
-            display: none;
-        }
-        #songList li {
-            padding: 12px;
-            margin: 5px 0;
-            background: #007BFF;
-            color: white;
-            border-radius: 5px;
-            cursor: pointer;
-            transition: background 0.3s;
-            text-align: center;
-            font-weight: bold;
-        }
-        #songList li:hover {
-            background: #0056b3;
-        }
-        #toggleSongList {
-            display: none;
-            text-align: center;
-            cursor: pointer;
-            padding: 10px;
-            background: #007BFF;
-            color: white;
-            border-radius: 5px;
-            margin-bottom: 10px;
-            font-weight: bold;
-        }
-        #playerContainer {
-            margin-top: 20px;
-            display: none;
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        #youtubePlayer {
-            width: 100%;
-            max-width: 640px;
-            height: 360px;
-            margin: 0 auto;
-            display: block;
-        }
         #lyricsDisplay {
             margin-top: 20px;
             white-space: pre-wrap;
@@ -89,88 +36,21 @@
             border-radius: 3px;
             transition: background-color 0.3s;
         }
-        #downloadBtn {
-            display: none;
-            margin-top: 10px;
-            padding: 10px;
-            background: #28a745;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            font-weight: bold;
-        }
     </style>
 </head>
 <body>
     <h1>LRC & YouTube Player</h1>
-    <div id="toggleSongList">Show Song List</div>
-    <ul id="songList"></ul>
-    <div id="playerContainer">
-        <div id="youtubePlayer"></div>
-        <div id="lyricsDisplay"></div>
-        <button id="downloadBtn">Download SRT</button>
-    </div>
+    <div id="lyricsDisplay"></div>
     
     <script>
         let player;
         let currentLyrics = [];
         let syncInterval;
         let currentLyricIndex = -1;
-        
-        document.getElementById('toggleSongList').addEventListener('click', () => {
-            document.getElementById('songList').classList.toggle('hidden');
-        });
-        
-        fetch('data.txt')
-            .then(response => response.text())
-            .then(data => {
-                const songList = document.getElementById('songList');
-                data.trim().split('\n').forEach(line => {
-                    const [filename, youtubeLink] = line.split('|');
-                    const li = document.createElement('li');
-                    li.textContent = filename.replace('.lrc', '');
-                    li.dataset.filename = filename;
-                    li.dataset.youtubeLink = youtubeLink;
-                    li.onclick = () => loadSong(filename, youtubeLink);
-                    songList.appendChild(li);
-                });
-            });
-
-        function loadSong(filename, youtubeLink) {
-            document.getElementById('songList').classList.add('hidden');
-            document.getElementById('toggleSongList').style.display = 'block';
-            
-            const videoId = youtubeLink.split('v=')[1]?.split('&')[0] || youtubeLink.split('youtu.be/')[1];
-            fetch(filename)
-                .then(response => response.text())
-                .then(text => {
-                    currentLyrics = parseLRC(text);
-                    displayLyrics();
-                    document.getElementById('downloadBtn').style.display = 'block';
-                    document.getElementById('downloadBtn').onclick = () => downloadFile(filename, text);
-                });
-            
-            if (player) {
-                player.loadVideoById(videoId);
-            }
-            document.getElementById('playerContainer').style.display = 'block';
-        }
-
-        function parseLRC(text) {
-            return text.split('\n').map(line => {
-                const match = line.match(/\[(\d+):(\d+)\.(\d+)\](.*)/);
-                if (match) {
-                    const time = parseInt(match[1]) * 60 + parseInt(match[2]) + parseInt(match[3]) / 1000;
-                    return { time, text: match[4].trim() };
-                }
-                return null;
-            }).filter(line => line);
-        }
 
         function displayLyrics() {
             const container = document.getElementById('lyricsDisplay');
-            container.innerHTML = currentLyrics.map((lyric, index) => `<p data-time="${lyric.time}" onclick="seekTo(${lyric.time})">${lyric.text}</p>`).join('');
+            container.innerHTML = currentLyrics.map((lyric, index) => `<p data-index="${index}" data-time="${lyric.time}" onclick="seekTo(${lyric.time})">${lyric.text}</p>`).join('');
         }
 
         function seekTo(time) {
@@ -179,14 +59,28 @@
                 player.playVideo();
             }
         }
-        
-        function downloadFile(filename, content) {
-            const element = document.createElement('a');
-            element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(content));
-            element.setAttribute('download', filename);
-            document.body.appendChild(element);
-            element.click();
-            document.body.removeChild(element);
+
+        function syncLyrics() {
+            if (!player || !player.getCurrentTime) return;
+            
+            const currentTime = player.getCurrentTime();
+            let index = currentLyrics.findIndex(lyric => lyric.time > currentTime) - 1;
+            
+            if (index !== currentLyricIndex) {
+                document.querySelectorAll('#lyricsDisplay p').forEach(p => p.classList.remove('highlighted-lyric'));
+                if (index >= 0) {
+                    document.querySelector(`#lyricsDisplay p[data-index="${index}"]`).classList.add('highlighted-lyric');
+                }
+                currentLyricIndex = index;
+            }
+        }
+
+        function onPlayerStateChange(event) {
+            if (event.data === YT.PlayerState.PLAYING) {
+                syncInterval = setInterval(syncLyrics, 100);
+            } else {
+                clearInterval(syncInterval);
+            }
         }
 
         const tag = document.createElement('script');
@@ -197,7 +91,8 @@
             player = new YT.Player('youtubePlayer', {
                 height: '360',
                 width: '640',
-                videoId: ''
+                videoId: '',
+                events: { 'onStateChange': onPlayerStateChange }
             });
         };
     </script>
