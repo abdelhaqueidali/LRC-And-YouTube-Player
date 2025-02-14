@@ -115,6 +115,7 @@
     <script>
         let player;
         let currentLyrics = [];
+        let syncInterval;
         let currentLyricIndex = -1;
         
         document.getElementById('toggleSongList').addEventListener('click', () => {
@@ -152,7 +153,6 @@
             
             if (player) {
                 player.loadVideoById(videoId);
-                setInterval(syncLyrics, 500);
             }
             document.getElementById('playerContainer').style.display = 'block';
         }
@@ -170,21 +170,36 @@
 
         function displayLyrics() {
             const container = document.getElementById('lyricsDisplay');
-            container.innerHTML = currentLyrics.map((lyric, index) => `<p data-index="${index}" data-time="${lyric.time}" onclick="seekTo(${lyric.time})">${lyric.text}</p>`).join('');
+            container.innerHTML = currentLyrics.map((lyric, index) => `<p data-time="${lyric.time}" onclick="seekTo(${lyric.time})">${lyric.text}</p>`).join('');
         }
 
-        function syncLyrics() {
-            if (!player) return;
-            const currentTime = player.getCurrentTime();
-            let newIndex = currentLyrics.findIndex(lyric => lyric.time > currentTime) - 1;
-            if (newIndex !== currentLyricIndex) {
-                currentLyricIndex = newIndex;
-                document.querySelectorAll('#lyricsDisplay p').forEach(p => p.classList.remove('highlighted-lyric'));
-                if (currentLyricIndex >= 0) {
-                    document.querySelector(`#lyricsDisplay p[data-index='${currentLyricIndex}']`).classList.add('highlighted-lyric');
-                }
+        function seekTo(time) {
+            if (player) {
+                player.seekTo(time, true);
+                player.playVideo();
             }
         }
+        
+        function downloadFile(filename, content) {
+            const element = document.createElement('a');
+            element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(content));
+            element.setAttribute('download', filename);
+            document.body.appendChild(element);
+            element.click();
+            document.body.removeChild(element);
+        }
+
+        const tag = document.createElement('script');
+        tag.src = "https://www.youtube.com/iframe_api";
+        document.head.appendChild(tag);
+
+        window.onYouTubeIframeAPIReady = function() {
+            player = new YT.Player('youtubePlayer', {
+                height: '360',
+                width: '640',
+                videoId: ''
+            });
+        };
     </script>
 </body>
 </html>
