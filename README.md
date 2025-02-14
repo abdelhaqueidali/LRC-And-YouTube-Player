@@ -1,2 +1,3 @@
-# tests
-This is a test area for me, I may leave the things I test here for anyone that is looking for ideas or somewhere to start, what may be left here is probably not working well if it does, you may find it in another repository with updates.
+ LRC & YouTube Player
+A simple webpage that loads LRC files with the video of the song from Youtube. The Text document has the information needed for this. It contains the name of the LRC file and its music link from youtube, I came up with this idea becasue I wanted to share my own lyrics collection with their Music, downloading th song files to attach with the lyrics files is not good, as because of the channels need people to see ads for support, as well because of copy right issue. The lyrics from here may be used to contribute to platforms that support line-by-line lyrics as well as those with plain text option after converting them to the plain text format.
+In general this is just an experiment with this idea. Note that I only did the prompts and AI, specifically Claude Sonnet 3.5, did the rest. 
