@@ -89,6 +89,10 @@
             border-radius: 3px;
             transition: background-color 0.3s;
         }
+        .current-line {
+            background-color: #ffc107;
+            font-weight: bold;
+        }
         #downloadBtn {
             display: none;
             margin-top: 10px;
@@ -170,7 +174,9 @@
 
         function displayLyrics() {
             const container = document.getElementById('lyricsDisplay');
-            container.innerHTML = currentLyrics.map((lyric, index) => `<p data-time="${lyric.time}" onclick="seekTo(${lyric.time})">${lyric.text}</p>`).join('');
+            container.innerHTML = currentLyrics.map((lyric, index) => 
+                `<p id="lyric-${index}" data-time="${lyric.time}" onclick="seekTo(${lyric.time})">${lyric.text}</p>`
+            ).join('');
         }
 
         function seekTo(time) {
@@ -189,6 +195,36 @@
             document.body.removeChild(element);
         }
 
+        function syncLyrics() {
+            if (!player || !currentLyrics.length) return;
+            
+            const currentTime = player.getCurrentTime();
+            let newIndex = currentLyrics.findIndex((lyric, index) => {
+                const nextLyric = currentLyrics[index + 1];
+                return lyric.time <= currentTime && (!nextLyric || nextLyric.time > currentTime);
+            });
+
+            if (newIndex !== currentLyricIndex) {
+                // Remove previous highlight
+                if (currentLyricIndex !== -1) {
+                    const prevElement = document.getElementById(`lyric-${currentLyricIndex}`);
+                    if (prevElement) prevElement.classList.remove('current-line');
+                }
+
+                // Add new highlight
+                if (newIndex !== -1) {
+                    const newElement = document.getElementById(`lyric-${newIndex}`);
+                    if (newElement) {
+                        newElement.classList.add('current-line');
+                        // Scroll into view
+                        newElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                }
+
+                currentLyricIndex = newIndex;
+            }
+        }
+
         const tag = document.createElement('script');
         tag.src = "https://www.youtube.com/iframe_api";
         document.head.appendChild(tag);
@@ -197,9 +233,25 @@
             player = new YT.Player('youtubePlayer', {
                 height: '360',
                 width: '640',
-                videoId: ''
+                videoId: '',
+                events: {
+                    'onStateChange': onPlayerStateChange
+                }
             });
         };
+
+        function onPlayerStateChange(event) {
+            // Clear existing interval
+            if (syncInterval) {
+                clearInterval(syncInterval);
+                syncInterval = null;
+            }
+
+            // If video is playing, start syncing lyrics
+            if (event.data === YT.PlayerState.PLAYING) {
+                syncInterval = setInterval(syncLyrics, 100);
+            }
+        }
     </script>
 </body>
 </html>
