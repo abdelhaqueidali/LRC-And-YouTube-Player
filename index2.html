@@ -1,10 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <!-- Previous head content remains the same -->
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LRC & YouTube Player</title>
     <style>
+        /* Previous styles remain the same */
         body {
             font-family: Arial, sans-serif;
             max-width: 800px;
@@ -105,16 +107,6 @@
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             margin-bottom: 20px;
         }
-        .lrc-input {
-            width: 100%;
-            height: 200px;
-            margin: 10px 0;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            font-family: monospace;
-            display: none;
-        }
     </style>
 </head>
 <body>
@@ -125,7 +117,6 @@
         <h3>Data Input (filename.lrc|youtubeURL format)</h3>
         <textarea id="manualInput" placeholder="Enter data in format:&#10;filename1.lrc|https://youtube.com/watch?v=...&#10;filename2.lrc|https://youtube.com/watch?v=..."></textarea>
         <button id="processButton">Process Input</button>
-        <textarea id="currentLrcInput" class="lrc-input" placeholder="Paste LRC file content here when prompted"></textarea>
     </div>
 
     <ul id="songList"></ul>
@@ -139,7 +130,6 @@
         let currentLyrics = [];
         let currentLyricIndex = -1;
         let syncInterval;
-        let lrcContents = new Map(); // Store LRC contents
         
         function showError(message) {
             const errorDisplay = document.getElementById('errorDisplay');
@@ -191,43 +181,25 @@
                 li.textContent = filename.replace('.lrc', '');
                 li.dataset.filename = filename;
                 li.dataset.youtubeLink = youtubeLink.trim();
-                li.onclick = () => promptForLyrics(filename, youtubeLink.trim());
+                li.onclick = () => loadSongFromFile(filename, youtubeLink.trim());
                 songList.appendChild(li);
             });
         }
 
-        function promptForLyrics(filename, youtubeLink) {
-            if (lrcContents.has(filename)) {
-                loadSong(filename, youtubeLink, lrcContents.get(filename));
-                return;
-            }
-
-            const lrcInput = document.getElementById('currentLrcInput');
-            lrcInput.style.display = 'block';
-            lrcInput.value = '';
-            lrcInput.placeholder = `Please paste the contents of ${filename} here...`;
-            
-            const oldButton = document.querySelector('.temp-button');
-            if (oldButton) oldButton.remove();
-
-            const loadButton = document.createElement('button');
-            loadButton.textContent = `Load ${filename}`;
-            loadButton.className = 'temp-button';
-            loadButton.style.cssText = 'margin: 10px 0; padding: 8px 16px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;';
-            
-            loadButton.onclick = () => {
-                const content = lrcInput.value;
-                if (content.trim()) {
-                    lrcContents.set(filename, content);
-                    lrcInput.style.display = 'none';
-                    loadButton.remove();
-                    loadSong(filename, youtubeLink, content);
-                } else {
-                    showError('Please paste the LRC file content');
-                }
-            };
-
-            lrcInput.parentNode.insertBefore(loadButton, lrcInput.nextSibling);
+        function loadSongFromFile(filename, youtubeLink) {
+            console.log('Attempting to load LRC file:', filename);
+            fetch(filename)
+                .then(response => {
+                    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                    return response.text();
+                })
+                .then(lrcContent => {
+                    loadSong(filename, youtubeLink, lrcContent);
+                })
+                .catch(error => {
+                    console.error('Error loading LRC file:', error);
+                    showError(`Could not load ${filename}. Make sure the file exists in the same directory.`);
+                });
         }
 
         // Load the YouTube IFrame Player API
