@@ -816,44 +816,59 @@
         }
         
         // --- Lyrics Handling ---
+                // --- Lyrics Handling ---
         function parseLRC(text) {
-            return text.split('\n').map(line => {
+            const lines = text.split('\n');
+            const lyrics = [];
+            let lastTime = 0; // Keep track of the last valid timestamp
+
+            for (const line of lines) {
                 const match = line.match(/\[(\d+):(\d+)\.(\d+)\](.*)/);
                 if (match) {
                     const minutes = parseInt(match[1]);
                     const seconds = parseInt(match[2]);
                     const milliseconds = parseInt(match[3]);
                     const time = minutes * 60 + seconds + milliseconds / (match[3].length === 3 ? 1000 : 100);
-                    return { time: time, text: match[4].trim() };
+                    const text = match[4].trim();
+                    lyrics.push({ time: time, text: text });
+                    lastTime = time; // Update lastTime with the current valid timestamp
+                } else {
+                    // Handle lines without timestamps (multi-line lyrics)
+                    const trimmedLine = line.trim();
+                    if (trimmedLine && lyrics.length > 0) {
+                         // Append to the last lyric's text, if one exists
+                         lyrics[lyrics.length - 1].text += '\n' + trimmedLine;
+                    }
                 }
-                return null;
-            }).filter(line => line);
+            }
+            return lyrics.filter(line => line); //filter to make sure there are no null entries
         }
         
+
         function displayLyrics() {
-            lyricsDisplay.innerHTML = currentLyrics.length 
+            lyricsDisplay.innerHTML = currentLyrics.length
                 ? currentLyrics.map((lyric, index) =>
-                    `<p id="lyric-${index}" data-time="${lyric.time}" onclick="seekTo(${lyric.time})">${lyric.text || "&nbsp;"}</p>`
+                    `<p id="lyric-${index}" data-time="${lyric.time}" onclick="seekTo(${lyric.time})">${lyric.text.replace(/\n/g, '<br>') || " "}</p>`
                 ).join('')
                 : '<p class="no-lyrics">No lyrics available for this song.</p>';
         }
-        
+
         function syncLyrics() {
             if (!currentLyrics.length) return;
-            
+
             const currentTime = audioPlayer.currentTime;
             let newIndex = currentLyrics.findIndex((lyric, index) => {
                 const nextLyric = currentLyrics[index + 1];
                 return lyric.time <= currentTime && (!nextLyric || nextLyric.time > currentTime);
             });
-            
+
             if (newIndex !== currentLyricIndex) {
                 // Remove previous highlight
                 if (currentLyricIndex !== -1) {
                     const prevElement = document.getElementById(`lyric-${currentLyricIndex}`);
                     if (prevElement) prevElement.classList.remove('current-line');
                 }
-                
+
                 // Add new highlight
                 if (newIndex !== -1) {
                     const newElement = document.getElementById(`lyric-${newIndex}`);
