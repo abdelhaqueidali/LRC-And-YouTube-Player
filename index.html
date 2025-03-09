@@ -278,6 +278,7 @@
         .volume-icon {
             color: var(--text-secondary);
             width: 20px;
+            cursor: pointer;
         }
         
         .volume-slider {
@@ -294,6 +295,26 @@
             background-color: var(--accent-color);
             border-radius: 2px;
             width: 70%;
+            position: relative;
+        }
+        
+        .volume-level::after {
+            content: '';
+            position: absolute;
+            right: -5px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 10px;
+            height: 10px;
+            background-color: var(--accent-color);
+            border-radius: 50%;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+        
+        .volume-slider:hover .volume-level::after {
+            opacity: 1;
         }
         
         #lyricsContainer {
@@ -312,8 +333,12 @@
             font-weight: 600;
         }
         
-        #downloadBtn {
-            display: none;
+        .download-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .download-btn {
             background-color: var(--accent-color);
             color: white;
             border: none;
@@ -322,13 +347,14 @@
             cursor: pointer;
             font-size: 0.9rem;
             transition: all 0.2s;
+            display: none;
         }
         
-        #downloadBtn:hover {
+        .download-btn:hover {
             background-color: #18a34a;
         }
         
-        #downloadBtn i {
+        .download-btn i {
             margin-right: 5px;
         }
         
@@ -386,6 +412,16 @@
             .album-art {
                 margin-right: 0;
                 margin-bottom: 15px;
+            }
+            
+            .download-buttons {
+                margin-top: 10px;
+                justify-content: center;
+            }
+            
+            .lyrics-header {
+                flex-direction: column;
+                align-items: flex-start;
             }
         }
     </style>
@@ -447,7 +483,10 @@
             <div id="lyricsContainer">
                 <div class="lyrics-header">
                     <h3 class="lyrics-title">Lyrics</h3>
-                    <button id="downloadBtn"><i class="fas fa-download"></i> Download LRC</button>
+                    <div class="download-buttons">
+                        <button id="downloadLrcBtn" class="download-btn"><i class="fas fa-download"></i> Download LRC</button>
+                        <button id="downloadSongBtn" class="download-btn"><i class="fas fa-music"></i> Download Song</button>
+                    </div>
                 </div>
                 <div id="lyricsDisplay"></div>
             </div>
@@ -462,7 +501,8 @@
         const playerContainer = document.getElementById('playerContainer');
         const lyricsDisplay = document.getElementById('lyricsDisplay');
         const errorDisplay = document.getElementById('errorDisplay');
-        const downloadBtn = document.getElementById('downloadBtn');
+        const downloadLrcBtn = document.getElementById('downloadLrcBtn');
+        const downloadSongBtn = document.getElementById('downloadSongBtn');
         const currentSongTitle = document.getElementById('currentSongTitle');
         const playPauseBtn = document.getElementById('playPauseBtn');
         const progressBar = document.getElementById('progressBar');
@@ -485,6 +525,7 @@
         let songIndex = -1;
         let songs = [];
         let isPlaying = false;
+        let lrcText = '';
         
         // Initialize the app
         document.addEventListener('DOMContentLoaded', initializeApp);
@@ -492,6 +533,10 @@
         function initializeApp() {
             loadSongList();
             setupEventListeners();
+            // Set initial volume to 70%
+            audioPlayer.volume = 0.7;
+            volumeLevel.style.width = '70%';
+            updateVolumeIcon();
         }
         
         function setupEventListeners() {
@@ -504,12 +549,24 @@
             audioPlayer.addEventListener('timeupdate', updateProgress);
             audioPlayer.addEventListener('loadedmetadata', updateTotalDuration);
             audioPlayer.addEventListener('ended', handleSongEnd);
+            audioPlayer.addEventListener('volumechange', () => {
+                if (!audioPlayer.muted) {
+                    volumeLevel.style.width = `${audioPlayer.volume * 100}%`;
+                    updateVolumeIcon();
+                }
+            });
             
             // Progress bar events
             progressContainer.addEventListener('click', setProgress);
             
             // Volume slider events
             volumeSlider.addEventListener('click', setVolume);
+            volumeSlider.addEventListener('mousemove', function(e) {
+                // Only adjust volume if mouse button is pressed down
+                if (e.buttons === 1) {
+                    setVolume(e);
+                }
+            });
             volumeIcon.addEventListener('click', toggleMute);
             
             // Control buttons
@@ -518,6 +575,13 @@
             nextBtn.addEventListener('click', playNextSong);
             rewindBtn.addEventListener('click', () => seekRelative(-10)); // Rewind 10 seconds
             forwardBtn.addEventListener('click', () => seekRelative(10)); // Forward 10 seconds
+            
+            // Download buttons
+            downloadSongBtn.addEventListener('click', () => {
+                if (currentSongFileName) {
+                    downloadFile(currentSongFileName, null, 'audio');
+                }
+            });
         }
         
         // --- Load Song List ---
@@ -582,6 +646,9 @@
             // Show player
             playerContainer.style.display = 'block';
             
+            // Enable download song button
+            downloadSongBtn.style.display = 'block';
+            
             // Load lyrics
             const lrcFilename = filename.substring(0, filename.lastIndexOf('.')) + '.lrc';
             
@@ -593,10 +660,11 @@
                     return response.text();
                 })
                 .then(text => {
+                    lrcText = text;
                     currentLyrics = parseLRC(text);
                     displayLyrics();
-                    downloadBtn.style.display = 'block';
-                    downloadBtn.onclick = () => downloadFile(lrcFilename, text);
+                    downloadLrcBtn.style.display = 'block';
+                    downloadLrcBtn.onclick = () => downloadFile(lrcFilename, lrcText, 'text');
                     
                     // Start syncing lyrics
                     clearInterval(syncInterval);
@@ -614,7 +682,7 @@
                     
                     currentLyrics = [];
                     displayLyrics();
-                    downloadBtn.style.display = 'none';
+                    downloadLrcBtn.style.display = 'none';
                     
                     // Play even without lyrics
                     audioPlayer.play();
@@ -706,11 +774,16 @@
         
         function setVolume(e) {
             const width = this.clientWidth;
-            const clickX = e.offsetX;
+            const clickX = Math.max(0, Math.min(clickX, width)); // Constrain value
             const volumePercent = clickX / width;
             
             audioPlayer.volume = volumePercent;
             volumeLevel.style.width = `${volumePercent * 100}%`;
+            
+            // Ensure we're not muted
+            if (audioPlayer.muted) {
+                audioPlayer.muted = false;
+            }
             
             // Update volume icon
             updateVolumeIcon();
@@ -729,12 +802,16 @@
         }
         
         function updateVolumeIcon() {
-            if (audioPlayer.volume > 0.5) {
+            if (audioPlayer.muted) {
+                volumeIcon.innerHTML = '<i class="fas fa-volume-mute"></i>';
+            } else if (audioPlayer.volume > 0.7) {
                 volumeIcon.innerHTML = '<i class="fas fa-volume-up"></i>';
-            } else if (audioPlayer.volume > 0) {
+            } else if (audioPlayer.volume > 0.3) {
                 volumeIcon.innerHTML = '<i class="fas fa-volume-down"></i>';
-            } else {
+            } else if (audioPlayer.volume > 0) {
                 volumeIcon.innerHTML = '<i class="fas fa-volume-off"></i>';
+            } else {
+                volumeIcon.innerHTML = '<i class="fas fa-volume-mute"></i>';
             }
         }
         
@@ -799,10 +876,20 @@
             return `${mins}:${secs < 10 ? '0' : ''}${secs}`;
         }
         
-        function downloadFile(filename, content) {
+        function downloadFile(filename, content, type) {
             const element = document.createElement('a');
-            element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(content));
-            element.setAttribute('download', filename);
+            
+            if (type === 'text' && content) {
+                // For LRC files
+                element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(content));
+                element.setAttribute('download', filename.split('/').pop());
+            } else if (type === 'audio') {
+                // For audio files
+                element.setAttribute('href', filename);
+                element.setAttribute('download', filename.split('/').pop());
+            }
+            
+            element.style.display = 'none';
             document.body.appendChild(element);
             element.click();
             document.body.removeChild(element);
