@@ -2,12 +2,12 @@
 
 This project provides a simple web interface for playing YouTube videos synchronized with LRC lyrics files.  It allows users to select a song from a predefined list, load the corresponding LRC file, and display the lyrics in sync with the playing YouTube video.
 
-## More Lrc files
-See https://github.com/abdelhaqueidali/Amazigh-Lyrics-Files-LRC
-
 ## Live Demo
 
 You can see a live demo of the project here: [https://abdelhaqueidali.github.io/LRC-And-YouTube-Player/](https://abdelhaqueidali.github.io/LRC-And-YouTube-Player/)
+
+## More Lrc files
+See https://github.com/abdelhaqueidali/Amazigh-Lyrics-Files-LRC
 
 ## Features
 
