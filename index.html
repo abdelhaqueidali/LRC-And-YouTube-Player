@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LRC & YouTube Player</title>
+    <title>Local Song & LRC Player</title>
     <style>
+        /* (Same CSS as before - no changes needed here) */
         body {
             font-family: Arial, sans-serif;
             max-width: 800px;
@@ -45,7 +46,7 @@
             background: #0056b3;
         }
         #toggleSongList {
-            display: none;
+            display: none;  /* Initially hidden, shown after data.txt is loaded */
             text-align: center;
             cursor: pointer;
             padding: 10px;
@@ -57,19 +58,17 @@
         }
         #playerContainer {
             margin-top: 20px;
-            display: none;
+            display: none; /* Hidden until a song is selected */
             background: white;
             padding: 20px;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
-        #youtubePlayer {
+       #audioPlayer {
             width: 100%;
-            max-width: 640px;
-            height: 360px;
-            margin: 0 auto;
-            display: block;
+            margin-bottom: 20px;
         }
+
         #lyricsDisplay {
             margin-top: 20px;
             white-space: pre-wrap;
@@ -84,17 +83,17 @@
             cursor: pointer;
         }
         .highlighted-lyric {
-            background-color: #fff3cd;
+            background-color: #fff3cd; /* Subtle highlight */
             padding: 2px 5px;
             border-radius: 3px;
             transition: background-color 0.3s;
         }
         .current-line {
-            background-color: #ffc107;
+            background-color: #ffc107; /* Stronger highlight for current line */
             font-weight: bold;
         }
         #downloadBtn {
-            display: none;
+            display: none; /* Hidden until a song is selected */
             margin-top: 10px;
             padding: 10px;
             background: #28a745;
@@ -104,88 +103,137 @@
             cursor: pointer;
             font-weight: bold;
         }
+        #errorDisplay{
+            color: red;
+            text-align: center;
+            margin-top: 10px;
+            display: none;
+
+        }
     </style>
 </head>
 <body>
-    <h1>LRC & YouTube Player</h1>
+    <h1>Local Song & LRC Player</h1>
     <div id="toggleSongList">Show Song List</div>
     <ul id="songList"></ul>
+     <div id="errorDisplay"></div>
     <div id="playerContainer">
-        <div id="youtubePlayer"></div>
+
+        <audio id="audioPlayer" controls></audio>
         <div id="lyricsDisplay"></div>
         <button id="downloadBtn">Download LRC</button>
     </div>
-    
+
     <script>
-        let player;
+        let audioPlayer = document.getElementById('audioPlayer');
         let currentLyrics = [];
         let syncInterval;
         let currentLyricIndex = -1;
-        
+        let currentSongFileName = ''; // Store the current song's filename
+
         document.getElementById('toggleSongList').addEventListener('click', () => {
             document.getElementById('songList').classList.toggle('hidden');
         });
-        
+
+
+        // --- Fetch and Process data.txt ---
         fetch('data.txt')
             .then(response => response.text())
             .then(data => {
                 const songList = document.getElementById('songList');
                 data.trim().split('\n').forEach(line => {
-                    const [filename, youtubeLink] = line.split('|');
+                    const filename = line.trim(); // Just the filename
+                    if(!filename) return; // prevent empty lines errors
                     const li = document.createElement('li');
-                    li.textContent = filename.replace('.lrc', '');
-                    li.dataset.filename = filename;
-                    li.dataset.youtubeLink = youtubeLink;
-                    li.onclick = () => loadSong(filename, youtubeLink);
+                    li.textContent = filename;  // Display full filename
+                    li.dataset.filename = filename; // Store for later use
+                    li.onclick = () => loadSong(filename);
                     songList.appendChild(li);
                 });
+                document.getElementById('toggleSongList').style.display = 'block'; // Show the toggle button
+            })
+           .catch(error => {
+                console.error('Error fetching data.txt:', error);
+                document.getElementById('errorDisplay').textContent = "Error: Could not load song list (data.txt).";
+                document.getElementById('errorDisplay').style.display = 'block';
             });
 
-        function loadSong(filename, youtubeLink) {
+
+        // --- Load Song and LRC ---
+        function loadSong(filename) {
+             document.getElementById('errorDisplay').style.display = 'none';
+            currentSongFileName = filename; // Store the filename
             document.getElementById('songList').classList.add('hidden');
-            document.getElementById('toggleSongList').style.display = 'block';
-            
-            const videoId = youtubeLink.split('v=')[1]?.split('&')[0] || youtubeLink.split('youtu.be/')[1];
-            fetch(filename)
-                .then(response => response.text())
+
+            const lrcFilename = filename.substring(0, filename.lastIndexOf('.')) + '.lrc'; // Construct LRC filename
+
+            // Load the song first (this was the primary issue)
+            audioPlayer.src = filename;
+            audioPlayer.load(); // Load the new source.
+
+
+            fetch(lrcFilename)
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! Status: ${response.status}`); // Check for HTTP errors
+                    }
+                    return response.text();
+                })
                 .then(text => {
                     currentLyrics = parseLRC(text);
                     displayLyrics();
                     document.getElementById('downloadBtn').style.display = 'block';
-                    document.getElementById('downloadBtn').onclick = () => downloadFile(filename, text);
+                    document.getElementById('downloadBtn').onclick = () => downloadFile(lrcFilename, text);
+                      document.getElementById('playerContainer').style.display = 'block'; //show the player
+                       // Clear previous sync, if any, and reset
+                    clearInterval(syncInterval);
+                    currentLyricIndex = -1;
+                    syncInterval = setInterval(syncLyrics, 100); // Start syncing again with the new song.
+                     audioPlayer.play(); // Start playing *after* lyrics are loaded
+                })
+                .catch(error => {
+                    console.error('Error fetching LRC file:', error);
+                      document.getElementById('errorDisplay').textContent = `Error: Could not load LRC file for ${filename}.  Does ${lrcFilename} exist?`;
+                      document.getElementById('errorDisplay').style.display = 'block';
+                      currentLyrics = []; // clear lyrics in case of error
+                      displayLyrics();     // display empty lyrics
+                      document.getElementById('playerContainer').style.display = 'block';
+                        audioPlayer.play();  //play even if there's no LRC
                 });
-            
-            if (player) {
-                player.loadVideoById(videoId);
-            }
-            document.getElementById('playerContainer').style.display = 'block';
         }
 
+        // --- Parse LRC Text ---
         function parseLRC(text) {
-            return text.split('\n').map(line => {
+             return text.split('\n').map(line => {
                 const match = line.match(/\[(\d+):(\d+)\.(\d+)\](.*)/);
                 if (match) {
-                    const time = parseInt(match[1]) * 60 + parseInt(match[2]) + parseInt(match[3]) / 1000;
-                    return { time, text: match[4].trim() };
+                    const minutes = parseInt(match[1]);
+                    const seconds = parseInt(match[2]);
+                    const milliseconds = parseInt(match[3]);
+                    const time = minutes * 60 + seconds + milliseconds / (match[3].length === 3 ? 1000 : 100); // handle both .xx and .xxx
+                    return { time: time, text: match[4].trim() };
                 }
                 return null;
             }).filter(line => line);
         }
 
+        // --- Display Lyrics ---
         function displayLyrics() {
-            const container = document.getElementById('lyricsDisplay');
-            container.innerHTML = currentLyrics.map((lyric, index) => 
+           const container = document.getElementById('lyricsDisplay');
+            container.innerHTML = currentLyrics.map((lyric, index) =>
                 `<p id="lyric-${index}" data-time="${lyric.time}" onclick="seekTo(${lyric.time})">${lyric.text}</p>`
             ).join('');
         }
 
+
+        // --- Seek to Time ---
         function seekTo(time) {
-            if (player) {
-                player.seekTo(time, true);
-                player.playVideo();
-            }
+           audioPlayer.currentTime = time; // Much simpler for audio
+           audioPlayer.play();
+
         }
-        
+
+        // --- Download LRC File ---
         function downloadFile(filename, content) {
             const element = document.createElement('a');
             element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(content));
@@ -195,10 +243,11 @@
             document.body.removeChild(element);
         }
 
-        function syncLyrics() {
-            if (!player || !currentLyrics.length) return;
-            
-            const currentTime = player.getCurrentTime();
+        // --- Sync Lyrics ---
+       function syncLyrics() {
+            if (!currentLyrics.length) return;  // if there's no lyrics
+
+            const currentTime = audioPlayer.currentTime;
             let newIndex = currentLyrics.findIndex((lyric, index) => {
                 const nextLyric = currentLyrics[index + 1];
                 return lyric.time <= currentTime && (!nextLyric || nextLyric.time > currentTime);
@@ -220,36 +269,7 @@
                         newElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     }
                 }
-
                 currentLyricIndex = newIndex;
-            }
-        }
-
-        const tag = document.createElement('script');
-        tag.src = "https://www.youtube.com/iframe_api";
-        document.head.appendChild(tag);
-
-        window.onYouTubeIframeAPIReady = function() {
-            player = new YT.Player('youtubePlayer', {
-                height: '360',
-                width: '640',
-                videoId: '',
-                events: {
-                    'onStateChange': onPlayerStateChange
-                }
-            });
-        };
-
-        function onPlayerStateChange(event) {
-            // Clear existing interval
-            if (syncInterval) {
-                clearInterval(syncInterval);
-                syncInterval = null;
-            }
-
-            // If video is playing, start syncing lyrics
-            if (event.data === YT.PlayerState.PLAYING) {
-                syncInterval = setInterval(syncLyrics, 100);
             }
         }
     </script>
