@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>LRC & YouTube Player</title>
     <style>
+        /* ... (Your existing CSS, no changes needed here) ... */
         body {
             font-family: Arial, sans-serif;
             max-width: 800px;
@@ -45,7 +46,7 @@
             background: #0056b3;
         }
         #toggleSongList {
-            display: none;
+            display: none; /* Initially hidden */
             text-align: center;
             cursor: pointer;
             padding: 10px;
@@ -57,12 +58,12 @@
         }
         #playerContainer {
             margin-top: 20px;
-            display: none;
+            display: none; /* Initially hidden */
             background: white;
             padding: 20px;
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            position: relative; /* Important for positioning the loader */
+            position: relative;
         }
         #youtubePlayer {
             width: 100%;
@@ -88,7 +89,7 @@
             background-color: #fff3cd;
             padding: 2px 5px;
             border-radius: 3px;
-            transition: background-color 0.3s;
+            transition: background-color: 0.3s;
         }
         .current-line {
             background-color: #ffc107;
@@ -105,25 +106,23 @@
             cursor: pointer;
             font-weight: bold;
         }
-
-        /* Loading spinner styles */
         #loadingOverlay {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background: rgba(255, 255, 255, 0.8); /* Semi-transparent white */
+            background: rgba(255, 255, 255, 0.8);
             display: flex;
             justify-content: center;
             align-items: center;
-            z-index: 10; /* Ensure it's above other content */
-            border-radius: 8px; /* Match playerContainer */
+            z-index: 10;
+            border-radius: 8px;
         }
 
         .spinner {
-            border: 4px solid #f3f3f3; /* Light grey */
-            border-top: 4px solid #3498db; /* Blue */
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #3498db;
             border-radius: 50%;
             width: 40px;
             height: 40px;
@@ -141,166 +140,165 @@
     <div id="toggleSongList">Show Song List</div>
     <ul id="songList"></ul>
     <div id="playerContainer">
-        <!-- Loading overlay -->
         <div id="loadingOverlay">
             <div class="spinner"></div>
         </div>
-
         <div id="youtubePlayer"></div>
         <div id="lyricsDisplay"></div>
         <button id="downloadBtn">Download LRC</button>
     </div>
-<script>
-    let player;
-    let currentLyrics = [];
-    let syncInterval;
-    let currentLyricIndex = -1;
 
-    document.getElementById('toggleSongList').addEventListener('click', () => {
-        document.getElementById('songList').classList.toggle('hidden');
-    });
+    <script>
+        let player;
+        let currentLyrics = [];
+        let syncInterval;
+        let currentLyricIndex = -1;
+        let isFirstLoad = true; // Flag to track the first load
 
-    fetch('data.txt')
-        .then(response => response.text())
-        .then(data => {
-            const songList = document.getElementById('songList');
-            data.trim().split('\n').forEach(line => {
-                const [filename, youtubeLink] = line.split('|');
-                const li = document.createElement('li');
-                li.textContent = filename.replace('.lrc', '');
-                li.dataset.filename = filename;
-                li.dataset.youtubeLink = youtubeLink;
-                li.onclick = () => loadSong(filename, youtubeLink);
-                songList.appendChild(li);
-            });
+        document.getElementById('toggleSongList').addEventListener('click', () => {
+            document.getElementById('songList').classList.toggle('hidden');
         });
 
-    function loadSong(filename, youtubeLink) {
-        document.getElementById('songList').classList.add('hidden');
-        document.getElementById('toggleSongList').style.display = 'block';
-
-        const videoId = youtubeLink.split('v=')[1]?.split('&')[0] || youtubeLink.split('youtu.be/')[1];
-        fetch(filename)
+        fetch('data.txt')
             .then(response => response.text())
-            .then(text => {
-                currentLyrics = parseLRC(text);
-                displayLyrics();
-                document.getElementById('downloadBtn').style.display = 'block';
-                document.getElementById('downloadBtn').onclick = () => downloadFile(filename, text);
+            .then(data => {
+                const songList = document.getElementById('songList');
+                const lines = data.trim().split('\n');
+                lines.forEach((line, index) => {
+                    const [filename, youtubeLink] = line.split('|');
+                    const li = document.createElement('li');
+                    li.textContent = filename.replace('.lrc', '');
+                    li.dataset.filename = filename;
+                    li.dataset.youtubeLink = youtubeLink;
+                    li.onclick = () => loadSong(filename, youtubeLink);
+                    songList.appendChild(li);
+
+                    // Autoplay the first video
+                    if (index === 0) {
+                         loadSong(filename, youtubeLink);
+                    }
+                });
             });
 
+        function loadSong(filename, youtubeLink) {
+             if (!isFirstLoad){ //if it's not first load hide some elements
+                document.getElementById('songList').classList.add('hidden');
+                document.getElementById('toggleSongList').style.display = 'block';
+             }
 
-         // Show the loading overlay
-         document.getElementById('loadingOverlay').style.display = 'flex';
-        if (player) {
-              player.loadVideoById(videoId); //load the new video
-          } else {
-           //if first time need create the player with loadVideoById
+            const videoId = youtubeLink.split('v=')[1]?.split('&')[0] || youtubeLink.split('youtu.be/')[1];
+            fetch(filename)
+                .then(response => response.text())
+                .then(text => {
+                    currentLyrics = parseLRC(text);
+                    displayLyrics();
+                    document.getElementById('downloadBtn').style.display = 'block';
+                    document.getElementById('downloadBtn').onclick = () => downloadFile(filename, text);
+                });
 
-            createPlayer(videoId); // Create the player and load
-          }
-        document.getElementById('playerContainer').style.display = 'block';
 
-    }
 
-    function parseLRC(text) {
-        return text.split('\n').map(line => {
-            const match = line.match(/\[(\d+):(\d+)\.(\d+)\](.*)/);
-            if (match) {
-                const time = parseInt(match[1]) * 60 + parseInt(match[2]) + parseInt(match[3]) / 1000;
-                return { time, text: match[4].trim() };
+            if (isFirstLoad) {
+                 document.getElementById('playerContainer').style.display = 'block'; //show when load
+                 createPlayer(videoId);  // Create and play on first load
+                isFirstLoad = false;
+            } else {
+               if (player) player.loadVideoById(videoId); // Just load if not first time
             }
-            return null;
-        }).filter(line => line);
-    }
 
-    function displayLyrics() {
-        const container = document.getElementById('lyricsDisplay');
-        container.innerHTML = currentLyrics.map((lyric, index) =>
-            `<p id="lyric-${index}" data-time="${lyric.time}" onclick="seekTo(${lyric.time})">${lyric.text}</p>`
-        ).join('');
-    }
-
-    function seekTo(time) {
-        if (player) {
-            player.seekTo(time, true);
-            player.playVideo();
         }
-    }
 
-    function downloadFile(filename, content) {
-        const element = document.createElement('a');
-        element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(content));
-        element.setAttribute('download', filename);
-        document.body.appendChild(element);
-        element.click();
-        document.body.removeChild(element);
-    }
-
-    function syncLyrics() {
-        if (!player || !currentLyrics.length) return;
-
-        const currentTime = player.getCurrentTime();
-        let newIndex = currentLyrics.findIndex((lyric, index) => {
-            const nextLyric = currentLyrics[index + 1];
-            return lyric.time <= currentTime && (!nextLyric || nextLyric.time > currentTime);
-        });
-
-        if (newIndex !== currentLyricIndex) {
-            // Remove previous highlight
-            if (currentLyricIndex !== -1) {
-                const prevElement = document.getElementById(`lyric-${currentLyricIndex}`);
-                if (prevElement) prevElement.classList.remove('current-line');
-            }
-
-            // Add new highlight
-            if (newIndex !== -1) {
-                const newElement = document.getElementById(`lyric-${newIndex}`);
-                if (newElement) {
-                    newElement.classList.add('current-line');
-                    // Scroll into view
-                    newElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      function parseLRC(text) {
+            return text.split('\n').map(line => {
+                const match = line.match(/\[(\d+):(\d+)\.(\d+)\](.*)/);
+                if (match) {
+                    const time = parseInt(match[1]) * 60 + parseInt(match[2]) + parseInt(match[3]) / 1000;
+                    return { time, text: match[4].trim() };
                 }
+                return null;
+            }).filter(line => line);
+        }
+
+        function displayLyrics() {
+            const container = document.getElementById('lyricsDisplay');
+            container.innerHTML = currentLyrics.map((lyric, index) =>
+                `<p id="lyric-${index}" data-time="${lyric.time}" onclick="seekTo(${lyric.time})">${lyric.text}</p>`
+            ).join('');
+        }
+
+        function seekTo(time) {
+            if (player) {
+                player.seekTo(time, true);
+                player.playVideo();
             }
-
-            currentLyricIndex = newIndex;
         }
-    }
 
-    const tag = document.createElement('script');
-    tag.src = "https://www.youtube.com/iframe_api";
-    document.head.appendChild(tag);
-  function createPlayer(videoId) {
-        player = new YT.Player('youtubePlayer', {
-            height: '360',
-            width: '640',
-            videoId: videoId,  // Use the videoId here
-            events: {
-                'onReady': onPlayerReady, // Add onReady event
-                'onStateChange': onPlayerStateChange
+        function downloadFile(filename, content) {
+            const element = document.createElement('a');
+            element.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(content));
+            element.setAttribute('download', filename);
+            document.body.appendChild(element);
+            element.click();
+            document.body.removeChild(element);
+        }
+        function syncLyrics() {
+             if (!player || !currentLyrics.length) return;
+             const currentTime = player.getCurrentTime();
+              let newIndex = currentLyrics.findIndex((lyric, index) => {
+                const nextLyric = currentLyrics[index + 1];
+                 return lyric.time <= currentTime && (!nextLyric || nextLyric.time > currentTime);
+            });
+            if (newIndex !== currentLyricIndex) {
+
+                if (currentLyricIndex !== -1) {
+                    const prevElement = document.getElementById(`lyric-${currentLyricIndex}`);
+                      if (prevElement) prevElement.classList.remove('current-line');
+                }
+
+                if (newIndex !== -1) {
+                     const newElement = document.getElementById(`lyric-${newIndex}`);
+                    if (newElement) {
+                        newElement.classList.add('current-line');
+                         newElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                }
+                 currentLyricIndex = newIndex;
+             }
+        }
+
+        const tag = document.createElement('script');
+        tag.src = "https://www.youtube.com/iframe_api";
+        document.head.appendChild(tag);
+
+        function createPlayer(videoId) {
+            player = new YT.Player('youtubePlayer', {
+                height: '360',
+                width: '640',
+                videoId: videoId,
+                events: {
+                    'onReady': onPlayerReady,
+                    'onStateChange': onPlayerStateChange
+                }
+            });
+        }
+
+        function onPlayerReady(event) {
+          document.getElementById('loadingOverlay').style.display = 'none';
+           if (isFirstLoad) {
+              event.target.playVideo(); // Autoplay the first video.
             }
-        });
-    }
-
-    // This function gets called when the player is ready.
-    function onPlayerReady(event) {
-      // Hide the loading overlay once the player is ready
-        document.getElementById('loadingOverlay').style.display = 'none';
-    }
-
-
-    function onPlayerStateChange(event) {
-        // Clear existing interval
-        if (syncInterval) {
-            clearInterval(syncInterval);
-            syncInterval = null;
         }
 
-        // If video is playing, start syncing lyrics
-        if (event.data === YT.PlayerState.PLAYING) {
-            syncInterval = setInterval(syncLyrics, 100);
+        function onPlayerStateChange(event) {
+            if (syncInterval) {
+                clearInterval(syncInterval);
+                syncInterval = null;
+            }
+             if (event.data === YT.PlayerState.PLAYING) {
+                syncInterval = setInterval(syncLyrics, 100);
+             }
         }
-    }
-</script>
+
+    </script>
 </body>
 </html>
